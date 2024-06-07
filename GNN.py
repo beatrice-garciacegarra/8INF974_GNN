@@ -1,7 +1,13 @@
 import os
+import time
+
+import numpy as np
 import torch
 import torch.nn as nn
+from numpy import *
+import math
 import torch_geometric.transforms as T
+from matplotlib import pyplot as plt
 from torch_geometric.datasets import ShapeNet
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, global_mean_pool, Linear
@@ -126,9 +132,22 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     early_stopping = EarlyStopping(patience=10)
 
+    train_losses = []
+    test_losses = []
+    accuracies = []
+    delta_times = []
+
     for epoch in tqdm(range(1, 101)):  # Number of epochs
+
+        start = time.time()
+
         train_loss = train(model, train_loader, optimizer, criterion)
         test_loss, accuracy = evaluate(model, test_loader, criterion)
+
+        train_losses.append(train_loss)
+        test_losses.append(test_loss)
+        accuracies.append(accuracy)
+
         print(f'Epoch {epoch:03d}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}')
 
         scheduler.step(test_loss)  # Step the scheduler with test loss
@@ -137,6 +156,8 @@ if __name__ == "__main__":
         if early_stopping.early_stop:
             print("Early stopping")
             break
+
+        delta_times.append('%.2f' % (time.time() - start))
 
     # Load the best model
     model.load_state_dict(torch.load('checkpoint.pt'))
@@ -153,8 +174,23 @@ if __name__ == "__main__":
     test_data = dataset[len(dataset) - 2].to(device)
     model.eval()
     pred = model(test_data).argmax(dim=1)
+
     pred_value = get_class_by_seg(torch.mode(pred)[0].item())
     awaited_value = get_class_by_seg(torch.mode(test_data.y)[0].item())
 
     print(f'Predicted value: {pred_value}')
     print(f'Awaited value: {awaited_value}')
+
+    ## Show Graphs
+
+    epochs = np.linspace(0, len(train_losses), len(train_losses))
+
+    plt.plot(epochs, train_losses, 'r', label="Train loss")
+    plt.plot(epochs, test_losses, 'b', label="Test loss")
+    plt.plot(epochs, accuracies, 'g', label="Accuracy")
+
+    plt.legend(loc="upper left")
+    plt.title("Performances of sef built GNN")
+
+    plt.show()
+
